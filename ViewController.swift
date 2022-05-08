@@ -2,7 +2,7 @@
 //  ViewController.swift
 //  AsyncAwaitDemo
 //
-//  Created by David Razmadze on 5/7/22.
+//  Created by David Razmadze on 5/8/22.
 //
 
 import UIKit
@@ -12,51 +12,56 @@ struct MovieResponse: Decodable {
   let description: String
 }
 
-enum CustomError: Error {
+enum MovieError: Error {
   case badURL
   case noData
   case cantDecode
-  // ... etc
+  case serverError
 }
 
 class ViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    view.backgroundColor = .darkGray
     
-    getMovies { result in
+    // Closure Method
+    getMovieData { result in
       switch result {
-      case .success(let movieReponse):
-        print(movieReponse)
+      case .success(let movieResponse):
+        print(movieResponse.title)
+        print(movieResponse.description)
       case .failure(let error):
         print(error)
       }
     }
     
-    async {
+    // Async/Await Method
+    Task {
       do {
-        let movies = try await fetchMovies()
-        print(movies)
+        let movieData = try await fetchMovieData()
+        print(movieData.title)
+        print(movieData.description)
       } catch {
         print(error)
       }
     }
-    
-    view.backgroundColor = .gray
   }
-
-  /// Old way - using completion blocks and closures
-  private func getMovies(completion: @escaping (Result<MovieResponse, CustomError>) -> Void) {
-    
+  
+  private func getMovieData(completion: @escaping(Result<MovieResponse, MovieError>) -> Void) {
     guard let url = URL(string: "https://reactnative.dev/movies.json") else {
       completion(.failure(.badURL))
       return
     }
     
     URLSession.shared.dataTask(with: url) { data, response, error in
-      // ❌ Get for errors and make sure data is safely unwrapped
       guard let data = data, error == nil else {
         completion(.failure(.noData))
+        return
+      }
+      
+      guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+        completion(.failure(.serverError))
         return
       }
       
@@ -64,20 +69,28 @@ class ViewController: UIViewController {
         completion(.failure(.cantDecode))
         return
       }
+      
       completion(.success(movieResponse))
     }.resume()
-    
-  }
-  
-  private func fetchMovies() async throws -> MovieResponse? {
-    guard let url = URL(string: "https://reactnative.dev/movies.json") else {
-      throw CustomError.badURL
-    }
-    
-    let (data, _) = try await URLSession.shared.data(from: url)
-    let movieResponse = try? JSONDecoder().decode(MovieResponse.self, from: data)
-    return movieResponse
   }
 
+  private func fetchMovieData() async throws -> MovieResponse {
+    guard let url = URL(string: "https://reactnative.dev/movies.json") else {
+      throw MovieError.badURL
+    }
+    
+    let (data, response) = try await URLSession.shared.data(from: url)
+    
+    guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+      throw MovieError.serverError
+    }
+    
+    guard let movieResponse = try? JSONDecoder().decode(MovieResponse.self, from: data) else {
+      throw MovieError.cantDecode
+    }
+    
+    return movieResponse
+  }
+  
 }
 
