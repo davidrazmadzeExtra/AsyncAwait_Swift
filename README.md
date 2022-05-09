@@ -9,3 +9,5 @@ API Endpoint: https://reactnative.dev/movies.json
   "movies": []
 }
 ```
+
+Great article on async/await: https://www.avanderlee.com/swift/async-await/
